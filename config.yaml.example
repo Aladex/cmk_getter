@@ -1,0 +1,10 @@
+listen: 0.0.0.0
+port: 8080
+domain: cmk.internal.domain.com
+polling: 10
+site: mysite
+folders:
+  - /path/to/folder1
+  - /path/to/folder2
+username: cmk_getter
+password: generated_password

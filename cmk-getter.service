@@ -1,0 +1,13 @@
+[Unit]
+Description=CMK Agent Getter Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/cmk_getter/cmk_getter
+WorkingDirectory=/opt/cmk_getter
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
