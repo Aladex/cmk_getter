@@ -4,6 +4,7 @@ import (
 	"github.com/jinzhu/configor"
 )
 
+// ConfigCmkGetter Global config
 var ConfigCmkGetter Config
 
 func init() {

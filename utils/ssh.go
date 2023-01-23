@@ -130,10 +130,22 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 	md5HashOnNode := fmt.Sprintf("%x", hashSum)
 	// Check if the md5 hash of the plugin file on the node is different
 	if md5HashOnNode != c.CalculateMd5() {
+		// Remove the plugin file on the node
+		err = sftpClient.Remove(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
+		if err != nil {
+			log.Println("Error removing plugin file:", err)
+			return err
+		}
 		// Create the plugin file on the node
-		pluginFile, err = sftpClient.Create(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
+		pluginFile, err := sftpClient.Create(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 		if err != nil {
 			log.Println("Error creating plugin file:", err)
+			return err
+		}
+		// Set 755 permissions
+		err = pluginFile.Chmod(0755)
+		if err != nil {
+			log.Println("Error setting permissions:", err)
 			return err
 		}
 		// Write the plugin content to the plugin file
