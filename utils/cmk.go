@@ -14,16 +14,6 @@ import (
 	"time"
 )
 
-const cmkVersionUrl = "version"
-
-var cmkSite = config.ConfigCmkGetter.Site
-var cmkDomain = config.ConfigCmkGetter.Domain
-
-const urlTemplate = "https://%s/%s/check_mk/api/1.0/%s"
-const downloadUrlTemplate = "https://%s/%s/check_mk/api/1.0/domain-types/agent/actions/download/invoke?os_type=linux_deb"
-
-var CurrentVersion string = ""
-
 func init() {
 	// Get the current version of check_mk
 	cmkVersionUrl := fmt.Sprintf(urlTemplate, config.ConfigCmkGetter.Domain, config.ConfigCmkGetter.Site, cmkVersionUrl)
@@ -36,30 +26,6 @@ func init() {
 		log.Fatal(err)
 	}
 	CurrentVersion = cmkVersion.CroppedVersion()
-}
-
-type CmkVersionChanges struct {
-	Version         string `json:"version"`
-	ErrorString     string `json:"error_string"`
-	TriggerDownload bool   `json:"trigger_download"`
-	Folder          string `json:"folder"`
-}
-
-type CmkVersionResponse struct {
-	Site    string `json:"site"`
-	Group   string `json:"group"`
-	RestApi struct {
-		Revision string `json:"revision"`
-	} `json:"rest_api"`
-	Versions struct {
-		Apache  []int  `json:"apache"`
-		Checkmk string `json:"checkmk"`
-		Python  string `json:"python"`
-		ModWsgi []int  `json:"mod_wsgi"`
-		Wsgi    []int  `json:"wsgi"`
-	} `json:"versions"`
-	Edition string `json:"edition"`
-	Demo    bool   `json:"demo"`
 }
 
 func BearerToken() string {
@@ -263,7 +229,7 @@ func (c *CmkVersionChanges) DownloadCmk(folderPath string) error {
 		return err
 	}
 	// Create the url
-	downloadUrl := fmt.Sprintf(downloadUrlTemplate, cmkDomain, cmkSite)
+	downloadUrl := fmt.Sprintf(urlTemplate, cmkDomain, cmkSite, downloadUrlTemplate)
 	// Get the file from the API
 	respHeader, file, err := GetUrl("file", downloadUrl)
 	if err != nil {
@@ -316,4 +282,23 @@ func CmkVersionHandler(channel chan CmkVersionChanges) {
 			}
 		}
 	}
+}
+
+func GetNodesList() ([]CheckMkNode, error) {
+	nodes := []CheckMkNode{
+		{
+			Host: "node1",
+			Port: "22",
+		},
+		{
+			Host: "node2",
+			Port: "22",
+		},
+		{
+			Host: "node3",
+			Port: "22",
+		},
+	}
+
+	return nodes, nil
 }

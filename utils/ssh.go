@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"log"
 	"os"
+	"time"
 )
 
 type CheckMkPlugin struct {
@@ -40,7 +41,7 @@ func (c CheckMkPlugin) CreateUrl() string {
 	return fmt.Sprintf(PluginUrlTemplate, config.ConfigCmkGetter.Domain, config.ConfigCmkGetter.Site, c.Name)
 }
 
-func (c CheckMkPlugin) GetPlugin() error {
+func (c *CheckMkPlugin) GetPlugin() error {
 	// Get the plugin from the API as []byte
 	_, pluginResp, err := GetUrl("json", c.CreateUrl())
 	if err != nil {
@@ -63,7 +64,7 @@ func (c CheckMkPlugin) CalculateMd5() string {
 // ReadRSAKey Read the RSA key from .ssh folder
 func ReadRSAKey() (ssh.Signer, error) {
 	// Read the RSA key from .ssh folder
-	key, err := os.ReadFile("/root/.ssh/id_ed25519")
+	key, err := os.ReadFile(config.ConfigCmkGetter.PathToIdRSA)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,8 @@ func (node CheckMkNode) CreateSshClient() (*ssh.Client, error) {
 	}
 	// Create the ssh client with golang.org/x/crypto/ssh and ssh.Signer
 	sshConfig := &ssh.ClientConfig{
-		User: "root",
+		User:            "root",
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
@@ -104,17 +106,30 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 		log.Println("Error creating ssh client:", err)
 		return err
 	}
+	defer func() {
+		err := sshClient.Close()
+		if err != nil {
+			log.Println("Error closing ssh client:", err)
+		}
+	}()
 	// Create the sftp client
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
 		log.Println("Error creating sftp client:", err)
 		return err
 	}
+	defer func() {
+		err := sftpClient.Close()
+		if err != nil {
+			log.Println("Error closing sftp client:", err)
+		}
+	}()
 	// Find the plugin file on the node
 	pluginFile, err := sftpClient.Open(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 	if err != nil {
 		log.Println("Error opening plugin file:", err)
-		return err
+		// Create the plugin file
+		pluginFile, err = sftpClient.Create(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 	}
 	// Convert *File object to []byte with reader and buffer
 	reader := bufio.NewReader(pluginFile)
@@ -154,9 +169,62 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 			log.Println("Error writing plugin file:", err)
 			return err
 		}
+		err = pluginFile.Close()
+		if err != nil {
+			log.Println("Error closing plugin file:", err)
+			return err
+		}
 		log.Println("Plugin", c.Name, "sent to", node.Host)
 		return nil
 	}
 	log.Println("Plugin", c.Name, "is actual on", node.Host)
+
 	return nil
+}
+
+// PluginChecker Check the plugins on the nodes and send the plugins if the md5 hash is different
+func PluginChecker() {
+	// Get the plugins from config
+	plugins := config.ConfigCmkGetter.Plugins
+	nodes, err := GetNodesList()
+	if err != nil {
+		log.Println("Error getting nodes list:", err)
+		panic(err)
+	}
+
+	// Iterate over the plugins
+	for _, plugin := range plugins {
+		log.Println("Checking plugin", plugin)
+		// Get the plugin from the API
+		cmkPlugin := CheckMkPlugin{Name: plugin}
+		err := cmkPlugin.GetPlugin()
+		if err != nil {
+			log.Println("Error getting plugin from API:", err)
+			continue
+		}
+		log.Println("Plugin", plugin, "got from API")
+		// Iterate over the nodes
+		for _, node := range nodes {
+			log.Println("Checking node", node.Host)
+			// Send the plugin to the node
+			err := node.SendPlugin(cmkPlugin)
+			if err != nil {
+				log.Println("Error sending plugin to node:", err)
+				continue
+			}
+			log.Println("Plugin", plugin, "checked on node", node.Host)
+		}
+	}
+}
+
+// Create ticker for the plugin checker
+func PluginCheckerTicker() {
+	// Create ticker for the plugin checker
+	log.Println("Plugin checker started")
+	ticker := time.NewTicker(time.Duration(config.ConfigCmkGetter.Polling) * time.Second)
+	go func() {
+		for range ticker.C {
+			PluginChecker()
+		}
+	}()
 }

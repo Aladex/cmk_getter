@@ -41,6 +41,7 @@ func Run() {
 	// Run goroutines
 	go utils.CmkVersionChecker(ticker, channel)
 	go utils.CmkVersionHandler(channel)
+	go utils.PluginCheckerTicker()
 }
 
 func mustFS() http.FileSystem {
@@ -53,9 +54,7 @@ func mustFS() http.FileSystem {
 	return http.FS(sub)
 }
 
-func main() {
-	Run()
-	// Create http API with gin
+func RunAPI() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	err := r.SetTrustedProxies(nil)
@@ -150,4 +149,10 @@ func main() {
 			panic(err)
 		}
 	}()
+}
+
+func main() {
+	Run()
+	// Run API
+	RunAPI()
 }
