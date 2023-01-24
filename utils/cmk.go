@@ -284,20 +284,43 @@ func CmkVersionHandler(channel chan CmkVersionChanges) {
 	}
 }
 
+// Generate default plugins list from config for CheckMkNode
+func GenerateDefaultPlugins(c *CheckMkNode) {
+	for _, plugin := range config.ConfigCmkGetter.Plugins {
+		c.Plugins = append(c.Plugins, CheckMkPlugin{
+			Name:     plugin,
+			IsActual: false,
+		})
+	}
+}
+
+// GetNodesList get the list of nodes from the API with tag_check_mk-agent-conn = ssh
 func GetNodesList() ([]CheckMkNode, error) {
-	nodes := []CheckMkNode{
-		{
-			Host: "node1",
-			Port: "22",
-		},
-		{
-			Host: "node2",
-			Port: "22",
-		},
-		{
-			Host: "node3",
-			Port: "22",
-		},
+	// Create the url
+	nodesUrl := fmt.Sprintf(urlTemplate, cmkDomain, cmkSite, hostConfigUrl)
+	// Get the nodes from the API
+	_, nodesResp, err := GetUrl("json", nodesUrl)
+	if err != nil {
+		return nil, err
+	}
+	// Convert []byte to CmkNodesResponse struct with json.Unmarshal
+	var cmkNodeResp CmkHostConfigResponse
+	err = json.Unmarshal(nodesResp, &cmkNodeResp)
+	if err != nil {
+		return nil, err
+	}
+	nodes := make([]CheckMkNode, 0)
+	// Iterate over the nodes
+	for _, node := range cmkNodeResp.Value {
+		// Check if the node has the tag_check_mk-agent-conn = ssh
+		if node.Extensions.Attributes.TagCheckMkAgentConn == "ssh" {
+			node := CheckMkNode{
+				Host: node.Id,
+			}
+			// Generate default plugins list
+			GenerateDefaultPlugins(&node)
+			nodes = append(nodes, node)
+		}
 	}
 
 	return nodes, nil

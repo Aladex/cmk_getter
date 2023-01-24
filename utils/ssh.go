@@ -15,15 +15,18 @@ import (
 
 type CheckMkPlugin struct {
 	Name        string `json:"name"`
-	Version     string `json:"version"`
+	IsActual    bool   `json:"is_actual"`
 	Url         string `json:"url"`
 	ByteContent []byte `json:"byte_content"`
 }
 
 type CheckMkNode struct {
-	Host         string `json:"host"`
-	Port         string `json:"port"`
-	PluginFolder string `json:"plugin_folder"`
+	Host         string          `json:"host"`
+	Port         string          `json:"port"`
+	PluginFolder string          `json:"plugin_folder"`
+	Plugins      []CheckMkPlugin `json:"plugins"`
+	// SSH is available only for the cmk_getter
+	IsAvailable bool `json:"is_available"`
 }
 
 // GetPluginFolder Return default plugin folder
@@ -34,6 +37,14 @@ func (node CheckMkNode) GetPluginFolder() string {
 	return node.PluginFolder
 }
 
+// GetPort Return default port
+func (node CheckMkNode) GetPort() string {
+	if node.Port == "" {
+		return "22"
+	}
+	return node.Port
+}
+
 // PluginUrlTemplate URL template for getting a plugin from the API
 const PluginUrlTemplate = "https://%s/%s/check_mk/agents/plugins/%s"
 
@@ -41,7 +52,7 @@ func (c CheckMkPlugin) CreateUrl() string {
 	return fmt.Sprintf(PluginUrlTemplate, config.ConfigCmkGetter.Domain, config.ConfigCmkGetter.Site, c.Name)
 }
 
-func (c *CheckMkPlugin) GetPlugin() error {
+func GetPlugin(c *CheckMkPlugin) error {
 	// Get the plugin from the API as []byte
 	_, pluginResp, err := GetUrl("json", c.CreateUrl())
 	if err != nil {
@@ -76,6 +87,21 @@ func ReadRSAKey() (ssh.Signer, error) {
 	return signer, nil
 }
 
+// CheckSsh Check if ssh is available
+func (node CheckMkNode) CheckSsh() error {
+	// Create the ssh client with golang.org/x/crypto/ssh and ssh.Signer
+	sshClient, err := node.CreateSshClient()
+	if err != nil {
+		return err
+	}
+	// Close the ssh client
+	err = sshClient.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateSshClient Create the ssh client with golang.org/x/crypto/ssh and ssh.Signer
 func (node CheckMkNode) CreateSshClient() (*ssh.Client, error) {
 	signer, err := ReadRSAKey()
@@ -91,7 +117,7 @@ func (node CheckMkNode) CreateSshClient() (*ssh.Client, error) {
 		},
 	}
 	// Connect to the node
-	sshClient, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", node.Host, node.Port), sshConfig)
+	sshClient, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", node.Host, node.GetPort()), sshConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +223,7 @@ func PluginChecker() {
 		log.Println("Checking plugin", plugin)
 		// Get the plugin from the API
 		cmkPlugin := CheckMkPlugin{Name: plugin}
-		err := cmkPlugin.GetPlugin()
+		err := GetPlugin(&cmkPlugin)
 		if err != nil {
 			log.Println("Error getting plugin from API:", err)
 			continue
@@ -217,7 +243,7 @@ func PluginChecker() {
 	}
 }
 
-// Create ticker for the plugin checker
+// PluginCheckerTicker Create ticker for the plugin checker
 func PluginCheckerTicker() {
 	// Create ticker for the plugin checker
 	log.Println("Plugin checker started")
