@@ -16,14 +16,14 @@ import (
 type CheckMkPlugin struct {
 	Name        string `json:"name"`
 	IsActual    bool   `json:"is_actual"`
-	Url         string `json:"url"`
-	ByteContent []byte `json:"byte_content"`
+	Url         string `json:",omitempty"`
+	ByteContent []byte `json:",omitempty"`
 }
 
 type CheckMkNode struct {
 	Host         string          `json:"host"`
-	Port         string          `json:"port"`
-	PluginFolder string          `json:"plugin_folder"`
+	Port         string          `json:",omitempty"`
+	PluginFolder string          `json:",omitempty"`
 	Plugins      []CheckMkPlugin `json:"plugins"`
 	// SSH is available only for the cmk_getter
 	IsAvailable bool `json:"is_available"`

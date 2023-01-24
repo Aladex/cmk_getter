@@ -2,6 +2,7 @@ package utils
 
 import (
 	"cmk_getter/config"
+	"sync"
 	"time"
 )
 
@@ -102,4 +103,11 @@ type CmkHostConfigResponse struct {
 			ClusterNodes        interface{} `json:"cluster_nodes"`
 		} `json:"extensions"`
 	} `json:"value"`
+}
+
+// CmkNodeMap is a map of the nodes in the check_mk config
+type CmkNodeMap struct {
+	Nodes map[string]CheckMkNode
+	// mutex to lock the map
+	Mutex sync.Mutex
 }

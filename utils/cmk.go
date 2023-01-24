@@ -28,6 +28,8 @@ func init() {
 	CurrentVersion = cmkVersion.CroppedVersion()
 }
 
+var cmkNodeMap = CmkNodeMap{}
+
 func BearerToken() string {
 	// Generate Bearer Token from Username and Password with base64
 	username := config.ConfigCmkGetter.Username
@@ -284,7 +286,7 @@ func CmkVersionHandler(channel chan CmkVersionChanges) {
 	}
 }
 
-// Generate default plugins list from config for CheckMkNode
+// GenerateDefaultPlugins Generate default plugins list from config for CheckMkNode
 func GenerateDefaultPlugins(c *CheckMkNode) {
 	for _, plugin := range config.ConfigCmkGetter.Plugins {
 		c.Plugins = append(c.Plugins, CheckMkPlugin{
