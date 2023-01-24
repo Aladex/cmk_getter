@@ -40,7 +40,8 @@ func Run() {
 	go utils.CmkVersionHandler(channel)
 	go utils.GetNodesTicker()
 	go utils.SSHStatusUpdater()
-	// go utils.PluginCheckerTicker()
+	go utils.CheckPlugins()
+	go utils.PluginCheckerTicker()
 }
 
 func mustFS() http.FileSystem {

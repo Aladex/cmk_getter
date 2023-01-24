@@ -10,6 +10,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"log"
 	"os"
+	"sync"
+	"time"
 )
 
 type CheckMkPlugin struct {
@@ -27,6 +29,9 @@ type CheckMkNode struct {
 	// SSH is available only for the cmk_getter
 	IsAvailable bool `json:"is_available"`
 }
+
+// Channel for trigger for plugins check
+var PluginCheckerTrigger = make(chan bool)
 
 // GetPluginFolder Return default plugin folder
 func (node CheckMkNode) GetPluginFolder() string {
@@ -205,6 +210,130 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 	log.Println("Plugin", c.Name, "is actual on", node.Host)
 
 	return nil
+}
+
+// CheckPluginsBySSH Check the plugins on the nodes and set the status is actual or not
+func CheckPluginsBySSH(node CheckMkNode) (CheckMkNode, error) {
+	// Create the ssh client
+	sshClient, err := node.CreateSshClient()
+	if err != nil {
+		log.Println("Error creating ssh client:", err)
+		return CheckMkNode{}, err
+	}
+	defer func() {
+		err := sshClient.Close()
+		if err != nil {
+			log.Println("Error closing ssh client:", err)
+		}
+	}()
+	// Create the sftp client
+	sftpClient, err := sftp.NewClient(sshClient)
+	if err != nil {
+		log.Println("Error creating sftp client:", err)
+		return CheckMkNode{}, err
+	}
+	defer func() {
+		err := sftpClient.Close()
+		if err != nil {
+			log.Println("Error closing sftp client:", err)
+		}
+	}()
+	// Iterate over the plugins
+	for _, plugin := range node.Plugins {
+		// Find the plugin file on the node
+		pluginFile, err := sftpClient.Open(fmt.Sprintf("%s/%s", node.GetPluginFolder(), plugin.Name))
+		if err != nil {
+			log.Println("Error opening plugin file:", err)
+			plugin.IsActual = false
+			continue
+		}
+		// Convert *File object to []byte with reader and buffer
+		reader := bufio.NewReader(pluginFile)
+		buffer := bytes.NewBuffer(make([]byte, 0))
+		_, err = buffer.ReadFrom(reader)
+		if err != nil {
+			log.Println("Error reading plugin file:", err)
+			plugin.IsActual = false
+			continue
+		}
+		// Calculate the md5 hash of the plugin file on the node
+		hashSum := md5.Sum(buffer.Bytes())
+		// Encode the hash to a string
+		md5HashOnNode := fmt.Sprintf("%x", hashSum)
+		// Check if the md5 hash of the plugin file on the node is different
+		if md5HashOnNode != plugin.CalculateMd5() {
+			plugin.IsActual = false
+			log.Println("Plugin", plugin.Name, "is not actual on", node.Host)
+			continue
+		}
+		plugin.IsActual = true
+		// Change plugin in the node plugins list
+		for i, nodePlugin := range node.Plugins {
+			if nodePlugin.Name == plugin.Name {
+				node.Plugins[i] = plugin
+			}
+		}
+	}
+	return node, nil
+}
+
+// PluginChecker Check the plugins on the nodes and set the status is actual or not
+func PluginChecker() {
+	// Create wait group
+	var wg sync.WaitGroup
+	// Defer wait group
+	defer wg.Wait()
+
+	// Iterate over the nodes
+	for _, node := range CheckMkNodeMap.Nodes {
+		// Check if the node is available
+		if !node.IsAvailable {
+			continue
+		}
+		log.Println("Check plugins on", node.Host)
+		// Add 1 to wait group
+		wg.Add(1)
+		// Run the check plugins by ssh in goroutine
+		go func(node CheckMkNode) {
+			// Defer wait group done
+			defer wg.Done()
+			// Check the plugins on the node
+			_, err := CheckPluginsBySSH(node)
+			if err != nil {
+				log.Println("Error checking plugins by ssh:", err)
+				return
+			}
+			// Update the node in the map
+			// Lock the map
+			CheckMkNodeMap.Mutex.Lock()
+			// Defer unlock the map
+			defer CheckMkNodeMap.Mutex.Unlock()
+			// Update the node in the map
+			CheckMkNodeMap.Nodes[node.Host] = node
+		}(node)
+	}
+}
+
+// Listen channel for trigger the plugin checker
+func CheckPlugins() {
+	for {
+		// Wait for the trigger
+		<-PluginCheckerTrigger
+		// Run the plugin checker
+		PluginChecker()
+	}
+}
+
+func PluginCheckerTicker() {
+	// Create ticker
+	ticker := time.NewTicker(time.Second * 60)
+	// Defer stop the ticker
+	defer ticker.Stop()
+	// Iterate over the ticker
+	for range ticker.C {
+		// Trigger the plugin checker
+		PluginCheckerTrigger <- true
+	}
 }
 
 // PluginChecker Check the plugins on the nodes and send the plugins if the md5 hash is different
