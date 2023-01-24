@@ -38,6 +38,8 @@ func Run() {
 	// Run goroutines
 	go utils.CmkVersionChecker(ticker, channel)
 	go utils.CmkVersionHandler(channel)
+	go utils.GetNodesTicker()
+	go utils.SSHStatusUpdater()
 	// go utils.PluginCheckerTicker()
 }
 

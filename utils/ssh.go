@@ -10,7 +10,6 @@ import (
 	"golang.org/x/crypto/ssh"
 	"log"
 	"os"
-	"time"
 )
 
 type CheckMkPlugin struct {
@@ -88,18 +87,18 @@ func ReadRSAKey() (ssh.Signer, error) {
 }
 
 // CheckSsh Check if ssh is available
-func (node CheckMkNode) CheckSsh() error {
+func (node CheckMkNode) CheckSsh() bool {
 	// Create the ssh client with golang.org/x/crypto/ssh and ssh.Signer
 	sshClient, err := node.CreateSshClient()
 	if err != nil {
-		return err
+		return false
 	}
 	// Close the ssh client
 	err = sshClient.Close()
 	if err != nil {
-		return err
+		return false
 	}
-	return nil
+	return true
 }
 
 // CreateSshClient Create the ssh client with golang.org/x/crypto/ssh and ssh.Signer
@@ -209,48 +208,48 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 }
 
 // PluginChecker Check the plugins on the nodes and send the plugins if the md5 hash is different
-func PluginChecker() {
-	// Get the plugins from config
-	plugins := config.ConfigCmkGetter.Plugins
-	nodes, err := GetNodesList()
-	if err != nil {
-		log.Println("Error getting nodes list:", err)
-		panic(err)
-	}
-
-	// Iterate over the plugins
-	for _, plugin := range plugins {
-		log.Println("Checking plugin", plugin)
-		// Get the plugin from the API
-		cmkPlugin := CheckMkPlugin{Name: plugin}
-		err := GetPlugin(&cmkPlugin)
-		if err != nil {
-			log.Println("Error getting plugin from API:", err)
-			continue
-		}
-		log.Println("Plugin", plugin, "got from API")
-		// Iterate over the nodes
-		for _, node := range nodes {
-			log.Println("Checking node", node.Host)
-			// Send the plugin to the node
-			err := node.SendPlugin(cmkPlugin)
-			if err != nil {
-				log.Println("Error sending plugin to node:", err)
-				continue
-			}
-			log.Println("Plugin", plugin, "checked on node", node.Host)
-		}
-	}
-}
+//func PluginChecker() {
+//	// Get the plugins from config
+//	plugins := config.ConfigCmkGetter.Plugins
+//	nodes, err := GetNodesList()
+//	if err != nil {
+//		log.Println("Error getting nodes list:", err)
+//		panic(err)
+//	}
+//
+//	// Iterate over the plugins
+//	for _, plugin := range plugins {
+//		log.Println("Checking plugin", plugin)
+//		// Get the plugin from the API
+//		cmkPlugin := CheckMkPlugin{Name: plugin}
+//		err := GetPlugin(&cmkPlugin)
+//		if err != nil {
+//			log.Println("Error getting plugin from API:", err)
+//			continue
+//		}
+//		log.Println("Plugin", plugin, "got from API")
+//		// Iterate over the nodes
+//		for _, node := range nodes {
+//			log.Println("Checking node", node.Host)
+//			// Send the plugin to the node
+//			err := node.SendPlugin(cmkPlugin)
+//			if err != nil {
+//				log.Println("Error sending plugin to node:", err)
+//				continue
+//			}
+//			log.Println("Plugin", plugin, "checked on node", node.Host)
+//		}
+//	}
+//}
 
 // PluginCheckerTicker Create ticker for the plugin checker
-func PluginCheckerTicker() {
-	// Create ticker for the plugin checker
-	log.Println("Plugin checker started")
-	ticker := time.NewTicker(time.Duration(config.ConfigCmkGetter.Polling) * time.Second)
-	go func() {
-		for range ticker.C {
-			PluginChecker()
-		}
-	}()
-}
+//func PluginCheckerTicker() {
+//	// Create ticker for the plugin checker
+//	log.Println("Plugin checker started")
+//	ticker := time.NewTicker(time.Duration(config.ConfigCmkGetter.Polling) * time.Second)
+//	go func() {
+//		for range ticker.C {
+//			PluginChecker()
+//		}
+//	}()
+//}

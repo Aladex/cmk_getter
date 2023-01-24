@@ -36,7 +36,11 @@ func RunAPI() {
 	// example: /public/assets/images/*
 	r.StaticFS("/assets", mustFS())
 
-	r.GET("/", func(c *gin.Context) {
+	// Create /api endpoint
+	api := r.Group("/api")
+
+	// Serve index.html on all other routes
+	r.NoRoute(func(c *gin.Context) {
 		file, _ := assets.Assets.ReadFile("dist/index.html")
 		c.Data(
 			http.StatusOK,
@@ -55,7 +59,7 @@ func RunAPI() {
 	})
 
 	// JSON endpoint with folders and files saved from Check_MK
-	r.GET("/cmk-files", func(context *gin.Context) {
+	api.GET("/cmk-files", func(context *gin.Context) {
 		// Get files from folders and return JSON
 		FoldersResp := FoldersResponse{
 			Version: utils.CurrentVersion,
@@ -100,16 +104,9 @@ func RunAPI() {
 	})
 
 	// JSON with ssh nodes
-	r.GET("/ssh-nodes", func(context *gin.Context) {
+	api.GET("/ssh-nodes", func(context *gin.Context) {
 		// Get nodes from CMK API
-		nodes, err := utils.GetNodesList()
-		if err != nil {
-			context.JSON(500, gin.H{
-				"error": err,
-			})
-			return
-		}
-		context.JSON(200, nodes)
+		context.JSON(200, utils.CheckMkNodeMap.Nodes)
 	})
 
 	// Start server

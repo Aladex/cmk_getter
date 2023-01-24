@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,7 +29,10 @@ func init() {
 	CurrentVersion = cmkVersion.CroppedVersion()
 }
 
-var cmkNodeMap = CmkNodeMap{}
+// Global struct CmkNodeMap for get and update nodes with mutex
+var CheckMkNodeMap = &CmkNodeMap{
+	Nodes: make(map[string]CheckMkNode),
+}
 
 func BearerToken() string {
 	// Generate Bearer Token from Username and Password with base64
@@ -297,33 +301,78 @@ func GenerateDefaultPlugins(c *CheckMkNode) {
 }
 
 // GetNodesList get the list of nodes from the API with tag_check_mk-agent-conn = ssh
-func GetNodesList() ([]CheckMkNode, error) {
+func GetNodesList() error {
 	// Create the url
 	nodesUrl := fmt.Sprintf(urlTemplate, cmkDomain, cmkSite, hostConfigUrl)
 	// Get the nodes from the API
 	_, nodesResp, err := GetUrl("json", nodesUrl)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Convert []byte to CmkNodesResponse struct with json.Unmarshal
 	var cmkNodeResp CmkHostConfigResponse
+
 	err = json.Unmarshal(nodesResp, &cmkNodeResp)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	nodes := make([]CheckMkNode, 0)
 	// Iterate over the nodes
 	for _, node := range cmkNodeResp.Value {
 		// Check if the node has the tag_check_mk-agent-conn = ssh
+
 		if node.Extensions.Attributes.TagCheckMkAgentConn == "ssh" {
-			node := CheckMkNode{
+			// Create a new CheckMkNode
+			cmkNode := CheckMkNode{
 				Host: node.Id,
 			}
-			// Generate default plugins list
-			GenerateDefaultPlugins(&node)
-			nodes = append(nodes, node)
+			// Generate the default plugins list
+			GenerateDefaultPlugins(&cmkNode)
+			// Add the node to the map if node is not in the map
+			if _, ok := CheckMkNodeMap.Nodes[node.Id]; !ok {
+				CheckMkNodeMap.Nodes[node.Id] = cmkNode
+			}
 		}
 	}
+	return nil
+}
 
-	return nodes, nil
+// Ticker Get the nodes list every 5 minutes
+func GetNodesTicker() {
+	for {
+		err := GetNodesList()
+		if err != nil {
+			log.Println(err)
+		}
+		time.Sleep(5 * time.Minute)
+	}
+}
+
+func SSHStatusUpdater() {
+	for {
+		// Create waitgroup for the goroutines
+		var wg sync.WaitGroup
+		for _, node := range CheckMkNodeMap.Nodes {
+			// Add 1 to the waitgroup
+			wg.Add(1)
+			// Start the goroutine
+			go func(node CheckMkNode) {
+				// Defer the waitgroup Done
+				defer wg.Done()
+				// Get ssh status
+				sshStatus := node.CheckSsh()
+				if sshStatus != node.IsAvailable {
+					// Lock the map
+					CheckMkNodeMap.Mutex.Lock()
+					defer CheckMkNodeMap.Mutex.Unlock()
+					// Update the node
+					node.IsAvailable = sshStatus
+					CheckMkNodeMap.Nodes[node.Host] = node
+				}
+			}(node)
+		}
+		// Wait for the goroutines to finish
+		wg.Wait()
+		// Sleep for 20 seconds
+		time.Sleep(20 * time.Second)
+	}
 }
