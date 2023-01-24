@@ -7,8 +7,14 @@ import (
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 )
+
+type PluginUpdateRequest struct {
+	Node   string `json:"node"`
+	Plugin string `json:"plugin"`
+}
 
 func RunAPI() {
 	gin.SetMode(gin.ReleaseMode)
@@ -105,33 +111,45 @@ func RunAPI() {
 
 	// API endpoint to trigger deploy plugin to node
 	api.POST("/deploy-plugin", func(context *gin.Context) {
-		// Get node name from request
-		nodeName := context.PostForm("node")
-		pluginName := context.PostForm("plugin")
-		// Get node from map
-		node, ok := utils.CheckMkNodeMap.Nodes[nodeName]
-		if !ok {
-			context.JSON(404, gin.H{
-				"error": "Node not found",
+		// Get node name and plugin name from request
+		var req PluginUpdateRequest
+		if err := context.ShouldBind(&req); err == nil {
+			// Iterate over nodes and find node with name and IsAvailable = true
+			node := utils.CheckMkNode{}
+			for _, n := range utils.CheckMkNodeMap.Nodes {
+				log.Println(n)
+				if n.Host == req.Node && n.IsAvailable {
+					node = n
+				}
+			}
+			// If node not found return error
+			if node.Host == "" {
+				context.JSON(500, gin.H{
+					"error": "Node not found",
+				})
+				return
+			}
+			// Deploy plugin to node via SendPlugin
+			err := node.SendPlugin(utils.CheckMkPlugin{
+				Name: req.Plugin,
+			})
+			if err != nil {
+				context.JSON(500, gin.H{
+					"error": err,
+				})
+				return
+			}
+
+			// Send update plugin trigger to channel
+			utils.PluginCheckerTrigger <- true
+
+			context.JSON(200, gin.H{
+				"message": "Plugin deployed",
 			})
 			return
 		}
-		// Deploy plugin to node via SendPlugin
-		err := node.SendPlugin(utils.CheckMkPlugin{
-			Name: pluginName,
-		})
-		if err != nil {
-			context.JSON(500, gin.H{
-				"error": err,
-			})
-			return
-		}
-
-		// Send update plugin trigger to channel
-		utils.PluginCheckerTrigger <- true
-
-		context.JSON(200, gin.H{
-			"message": "Plugin deployed",
+		context.JSON(500, gin.H{
+			"error": "Bad request",
 		})
 	})
 
