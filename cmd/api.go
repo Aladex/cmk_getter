@@ -103,6 +103,38 @@ func RunAPI() {
 		context.JSON(200, FoldersResp)
 	})
 
+	// API endpoint to trigger deploy plugin to node
+	api.POST("/deploy-plugin", func(context *gin.Context) {
+		// Get node name from request
+		nodeName := context.PostForm("node")
+		pluginName := context.PostForm("plugin")
+		// Get node from map
+		node, ok := utils.CheckMkNodeMap.Nodes[nodeName]
+		if !ok {
+			context.JSON(404, gin.H{
+				"error": "Node not found",
+			})
+			return
+		}
+		// Deploy plugin to node via SendPlugin
+		err := node.SendPlugin(utils.CheckMkPlugin{
+			Name: pluginName,
+		})
+		if err != nil {
+			context.JSON(500, gin.H{
+				"error": err,
+			})
+			return
+		}
+
+		// Send update plugin trigger to channel
+		utils.PluginCheckerTrigger <- true
+
+		context.JSON(200, gin.H{
+			"message": "Plugin deployed",
+		})
+	})
+
 	// JSON with ssh nodes
 	api.GET("/ssh-nodes", func(context *gin.Context) {
 		// Get nodes from CMK API
