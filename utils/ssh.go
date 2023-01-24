@@ -30,7 +30,7 @@ type CheckMkNode struct {
 	IsAvailable bool `json:"is_available"`
 }
 
-// Channel for trigger for plugins check
+// PluginCheckerTrigger Channel for trigger for plugins check
 var PluginCheckerTrigger = make(chan bool)
 
 // GetPluginFolder Return default plugin folder
@@ -130,6 +130,12 @@ func (node CheckMkNode) CreateSshClient() (*ssh.Client, error) {
 
 // SendPlugin Send the plugin to the node with ssh if the md5 hash is different
 func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
+	// Get the plugin from the API as []byte
+	err := GetPlugin(&c)
+	if err != nil {
+		log.Println("Error getting plugin from API")
+		return err
+	}
 	// Create the ssh client
 	sshClient, err := node.CreateSshClient()
 	if err != nil {
@@ -240,6 +246,12 @@ func CheckPluginsBySSH(node CheckMkNode) (CheckMkNode, error) {
 	}()
 	// Iterate over the plugins
 	for _, plugin := range node.Plugins {
+		err := GetPlugin(&plugin)
+		if err != nil {
+			log.Println("Error getting plugin:", err)
+			plugin.IsActual = false
+			continue
+		}
 		// Find the plugin file on the node
 		pluginFile, err := sftpClient.Open(fmt.Sprintf("%s/%s", node.GetPluginFolder(), plugin.Name))
 		if err != nil {
@@ -314,7 +326,7 @@ func PluginChecker() {
 	}
 }
 
-// Listen channel for trigger the plugin checker
+// CheckPlugins Listen channel for trigger the plugin checker
 func CheckPlugins() {
 	for {
 		// Wait for the trigger
@@ -325,60 +337,10 @@ func CheckPlugins() {
 }
 
 func PluginCheckerTicker() {
-	// Create ticker
-	ticker := time.NewTicker(time.Second * 60)
-	// Defer stop the ticker
-	defer ticker.Stop()
-	// Iterate over the ticker
-	for range ticker.C {
-		// Trigger the plugin checker
+	// Send the trigger to the channel every 5 minutes
+	ticker := time.NewTicker(5 * time.Minute)
+	for {
+		<-ticker.C
 		PluginCheckerTrigger <- true
 	}
 }
-
-// PluginChecker Check the plugins on the nodes and send the plugins if the md5 hash is different
-//func PluginChecker() {
-//	// Get the plugins from config
-//	plugins := config.ConfigCmkGetter.Plugins
-//	nodes, err := GetNodesList()
-//	if err != nil {
-//		log.Println("Error getting nodes list:", err)
-//		panic(err)
-//	}
-//
-//	// Iterate over the plugins
-//	for _, plugin := range plugins {
-//		log.Println("Checking plugin", plugin)
-//		// Get the plugin from the API
-//		cmkPlugin := CheckMkPlugin{Name: plugin}
-//		err := GetPlugin(&cmkPlugin)
-//		if err != nil {
-//			log.Println("Error getting plugin from API:", err)
-//			continue
-//		}
-//		log.Println("Plugin", plugin, "got from API")
-//		// Iterate over the nodes
-//		for _, node := range nodes {
-//			log.Println("Checking node", node.Host)
-//			// Send the plugin to the node
-//			err := node.SendPlugin(cmkPlugin)
-//			if err != nil {
-//				log.Println("Error sending plugin to node:", err)
-//				continue
-//			}
-//			log.Println("Plugin", plugin, "checked on node", node.Host)
-//		}
-//	}
-//}
-
-// PluginCheckerTicker Create ticker for the plugin checker
-//func PluginCheckerTicker() {
-//	// Create ticker for the plugin checker
-//	log.Println("Plugin checker started")
-//	ticker := time.NewTicker(time.Duration(config.ConfigCmkGetter.Polling) * time.Second)
-//	go func() {
-//		for range ticker.C {
-//			PluginChecker()
-//		}
-//	}()
-//}

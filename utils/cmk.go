@@ -29,7 +29,7 @@ func init() {
 	CurrentVersion = cmkVersion.CroppedVersion()
 }
 
-// Global struct CmkNodeMap for get and update nodes with mutex
+// CheckMkNodeMap Global struct CmkNodeMap for get and update nodes with mutex
 var CheckMkNodeMap = &CmkNodeMap{
 	Nodes: make(map[string]CheckMkNode),
 }
