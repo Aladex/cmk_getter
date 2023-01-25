@@ -119,6 +119,7 @@ func (node CheckMkNode) CreateSshClient() (*ssh.Client, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
+		Timeout: 5 * time.Second,
 	}
 	// Connect to the node
 	sshClient, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", node.Host, node.GetPort()), sshConfig)
@@ -331,6 +332,8 @@ func CheckPlugins() {
 	for {
 		// Wait for the trigger
 		<-PluginCheckerTrigger
+		// Log info that the plugin checker is running
+		log.Logger.Infoln("Run plugin checker")
 		// Run the plugin checker
 		PluginChecker()
 	}

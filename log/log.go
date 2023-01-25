@@ -49,6 +49,6 @@ func init() {
 
 func GinrusLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		Logger.Infoln(c.Request.Method, c.Request.URL.Path, c.ClientIP())
+		Logger.Infoln("HTTP Request", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 	}
 }

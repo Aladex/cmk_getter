@@ -349,30 +349,35 @@ func GetNodesTicker() {
 
 func SSHStatusUpdater() {
 	for {
-		// Create waitgroup for the goroutines
-		var wg sync.WaitGroup
-		for _, node := range CheckMkNodeMap.Nodes {
-			// Add 1 to the waitgroup
-			wg.Add(1)
-			// Start the goroutine
-			go func(node CheckMkNode) {
-				// Defer the waitgroup Done
-				defer wg.Done()
-				// Get ssh status
-				sshStatus := node.CheckSsh()
-				if sshStatus != node.IsAvailable {
-					// Lock the map
-					CheckMkNodeMap.Mutex.Lock()
-					defer CheckMkNodeMap.Mutex.Unlock()
-					// Update the node
-					node.IsAvailable = sshStatus
-					CheckMkNodeMap.Nodes[node.Host] = node
-				}
-			}(node)
+		// Check if the map is not empty
+		if len(CheckMkNodeMap.Nodes) > 0 {
+			// Create waitgroup for the goroutines
+			var wg sync.WaitGroup
+			for _, node := range CheckMkNodeMap.Nodes {
+				// Add 1 to the waitgroup
+				wg.Add(1)
+				// Start the goroutine
+				go func(node CheckMkNode) {
+					// Defer the waitgroup Done
+					defer wg.Done()
+					// Get ssh status
+					sshStatus := node.CheckSsh()
+					if sshStatus != node.IsAvailable {
+						// Lock the map
+						CheckMkNodeMap.Mutex.Lock()
+						defer CheckMkNodeMap.Mutex.Unlock()
+						// Update the node
+						node.IsAvailable = sshStatus
+						CheckMkNodeMap.Nodes[node.Host] = node
+					}
+				}(node)
+			}
+			// Wait for the goroutines to finish and send true to the channel PluginCheckerTrigger and sleep 20 seconds
+			wg.Wait()
+			PluginCheckerTrigger <- true
+			time.Sleep(20 * time.Second)
 		}
-		// Wait for the goroutines to finish
-		wg.Wait()
-		// Sleep for 20 seconds
-		time.Sleep(20 * time.Second)
+		// Sleep 2 seconds
+		time.Sleep(2 * time.Second)
 	}
 }
