@@ -33,6 +33,7 @@ type Config struct {
 	Password    string   `json:"password" yaml:"password"`
 	Polling     int      `json:"polling" yaml:"polling"`
 	Plugins     []string `json:"plugins" yaml:"plugins"`
+	LogLevel    string   `json:"log_level" yaml:"log_level"`
 }
 
 func ReadConfig() (Config, error) {

@@ -3,11 +3,11 @@ package main
 import (
 	assets "cmk_getter"
 	"cmk_getter/config"
+	"cmk_getter/log"
 	"cmk_getter/utils"
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
 )
 
@@ -19,24 +19,17 @@ type PluginUpdateRequest struct {
 func RunAPI() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	// Set logger from log package
+	r.Use(log.GinrusLogger())
 	err := r.SetTrustedProxies(nil)
+	if err != nil {
+		panic(err)
+	}
+
 	// Allow all CORS
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true
 	r.Use(cors.New(corsConfig))
-
-	if err != nil {
-		panic(err)
-	}
-	//
-	// Set logger config
-	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		return fmt.Sprintf("%s %s %s\n",
-			param.TimeStamp.Format("2006/01/02 15:04:05"),
-			param.Path,
-			param.ClientIP,
-		)
-	}))
 
 	// Serve static files
 	// example: /public/assets/images/*
@@ -117,7 +110,7 @@ func RunAPI() {
 			// Iterate over nodes and find node with name and IsAvailable = true
 			node := utils.CheckMkNode{}
 			for _, n := range utils.CheckMkNodeMap.Nodes {
-				log.Println(n)
+				log.Logger.Debug("Node: ", n.Host)
 				if n.Host == req.Node && n.IsAvailable {
 					node = n
 				}

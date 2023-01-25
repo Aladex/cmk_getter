@@ -2,10 +2,10 @@ package utils
 
 import (
 	"cmk_getter/config"
+	"cmk_getter/log"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -20,11 +20,11 @@ func init() {
 	cmkVersionUrl := fmt.Sprintf(urlTemplate, config.ConfigCmkGetter.Domain, config.ConfigCmkGetter.Site, cmkVersionUrl)
 	_, response, err := GetUrl("json", cmkVersionUrl)
 	if err != nil {
-		log.Fatal(err)
+		log.Logger.Fatalln(err)
 	}
 	cmkVersion, err := GetCmkVersion(response)
 	if err != nil {
-		log.Fatal(err)
+		log.Logger.Fatalln(err)
 	}
 	CurrentVersion = cmkVersion.CroppedVersion()
 }
@@ -165,7 +165,7 @@ func CreateSymlink(folderPath, currentVersion string) error {
 // CmkVersionChecker Ticker to check the current version of check_mk
 // If the version is different from the current one, it will send a message to the channel
 func CmkVersionChecker(ticker *time.Ticker, channel chan CmkVersionChanges) {
-	log.Println("Start CmkVersionChecker")
+	log.Logger.Infoln("Start CmkVersionChecker")
 	for {
 		select {
 		case <-ticker.C:
@@ -268,23 +268,23 @@ func (c *CmkVersionChanges) DownloadCmk(folderPath string) error {
 
 // CmkVersionHandler Handle the version changes
 func CmkVersionHandler(channel chan CmkVersionChanges) {
-	log.Println("Start CmkVersionHandler")
+	log.Logger.Infoln("Start CmkVersionHandler")
 	for {
 		select {
 		case versionChanges := <-channel:
 			if versionChanges.TriggerDownload {
 				// Log the version changes
-				log.Printf("New version of check_mk: %s", versionChanges.Version)
+				log.Logger.Infoln("New version of check_mk: %s", versionChanges.Version)
 				// Download the new version
 				err := versionChanges.DownloadCmk(versionChanges.Folder)
 				if err != nil {
-					log.Println(err)
+					log.Logger.Infoln(err)
 				}
 				// Log the download
-				log.Printf("Downloaded version: %s in folder %s", versionChanges.Version, versionChanges.Folder)
+				log.Logger.Infoln("Downloaded version: %s in folder %s", versionChanges.Version, versionChanges.Folder)
 			}
 			if versionChanges.ErrorString != "" {
-				log.Println(versionChanges.ErrorString)
+				log.Logger.Infoln(versionChanges.ErrorString)
 			}
 		}
 	}
@@ -341,7 +341,7 @@ func GetNodesTicker() {
 	for {
 		err := GetNodesList()
 		if err != nil {
-			log.Println(err)
+			log.Logger.Infoln(err)
 		}
 		time.Sleep(5 * time.Minute)
 	}

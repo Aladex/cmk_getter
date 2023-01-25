@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"cmk_getter/config"
+	"cmk_getter/log"
 	"crypto/md5"
 	"fmt"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -60,7 +60,7 @@ func GetPlugin(c *CheckMkPlugin) error {
 	// Get the plugin from the API as []byte
 	_, pluginResp, err := GetUrl("json", c.CreateUrl())
 	if err != nil {
-		log.Println("Error getting plugin from API")
+		log.Logger.Info("Error getting plugin from API")
 		return err
 	}
 	// Set the byte content
@@ -133,37 +133,37 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 	// Get the plugin from the API as []byte
 	err := GetPlugin(&c)
 	if err != nil {
-		log.Println("Error getting plugin from API")
+		log.Logger.Debugln("Error getting plugin from API")
 		return err
 	}
 	// Create the ssh client
 	sshClient, err := node.CreateSshClient()
 	if err != nil {
-		log.Println("Error creating ssh client:", err)
+		log.Logger.Debugln("Error creating ssh client:", err)
 		return err
 	}
 	defer func() {
 		err := sshClient.Close()
 		if err != nil {
-			log.Println("Error closing ssh client:", err)
+			log.Logger.Traceln("Error closing ssh client:", err)
 		}
 	}()
 	// Create the sftp client
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
-		log.Println("Error creating sftp client:", err)
+		log.Logger.Debugln("Error creating sftp client:", err)
 		return err
 	}
 	defer func() {
 		err := sftpClient.Close()
 		if err != nil {
-			log.Println("Error closing sftp client:", err)
+			log.Logger.Debugln("Error closing sftp client:", err)
 		}
 	}()
 	// Find the plugin file on the node
 	pluginFile, err := sftpClient.Open(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 	if err != nil {
-		log.Println("Error opening plugin file:", err)
+		log.Logger.Debugln("Error opening plugin file:", err)
 		// Create the plugin file
 		pluginFile, err = sftpClient.Create(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 	}
@@ -172,7 +172,7 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 	buffer := bytes.NewBuffer(make([]byte, 0))
 	_, err = buffer.ReadFrom(reader)
 	if err != nil {
-		log.Println("Error reading plugin file:", err)
+		log.Logger.Debugln("Error reading plugin file:", err)
 		return err
 	}
 	// Calculate the md5 hash of the plugin file on the node
@@ -184,36 +184,36 @@ func (node CheckMkNode) SendPlugin(c CheckMkPlugin) error {
 		// Remove the plugin file on the node
 		err = sftpClient.Remove(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 		if err != nil {
-			log.Println("Error removing plugin file:", err)
+			log.Logger.Debugln("Error removing plugin file:", err)
 			return err
 		}
 		// Create the plugin file on the node
 		pluginFile, err := sftpClient.Create(fmt.Sprintf("%s/%s", node.GetPluginFolder(), c.Name))
 		if err != nil {
-			log.Println("Error creating plugin file:", err)
+			log.Logger.Debugln("Error creating plugin file:", err)
 			return err
 		}
 		// Set 755 permissions
 		err = pluginFile.Chmod(0755)
 		if err != nil {
-			log.Println("Error setting permissions:", err)
+			log.Logger.Debugln("Error setting permissions:", err)
 			return err
 		}
 		// Write the plugin content to the plugin file
 		_, err = pluginFile.Write(c.ByteContent)
 		if err != nil {
-			log.Println("Error writing plugin file:", err)
+			log.Logger.Debugln("Error writing plugin file:", err)
 			return err
 		}
 		err = pluginFile.Close()
 		if err != nil {
-			log.Println("Error closing plugin file:", err)
+			log.Logger.Debugln("Error closing plugin file:", err)
 			return err
 		}
-		log.Println("Plugin", c.Name, "sent to", node.Host)
+		log.Logger.Debugln("Plugin", c.Name, "sent to", node.Host)
 		return nil
 	}
-	log.Println("Plugin", c.Name, "is actual on", node.Host)
+	log.Logger.Debugln("Plugin", c.Name, "is actual on", node.Host)
 
 	return nil
 }
@@ -223,39 +223,39 @@ func CheckPluginsBySSH(node CheckMkNode) (CheckMkNode, error) {
 	// Create the ssh client
 	sshClient, err := node.CreateSshClient()
 	if err != nil {
-		log.Println("Error creating ssh client:", err)
+		log.Logger.Debugln("Error creating ssh client:", err)
 		return CheckMkNode{}, err
 	}
 	defer func() {
 		err := sshClient.Close()
 		if err != nil {
-			log.Println("Error closing ssh client:", err)
+			log.Logger.Debugln("Error closing ssh client:", err)
 		}
 	}()
 	// Create the sftp client
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
-		log.Println("Error creating sftp client:", err)
+		log.Logger.Debugln("Error creating sftp client:", err)
 		return CheckMkNode{}, err
 	}
 	defer func() {
 		err := sftpClient.Close()
 		if err != nil {
-			log.Println("Error closing sftp client:", err)
+			log.Logger.Debugln("Error closing sftp client:", err)
 		}
 	}()
 	// Iterate over the plugins
 	for _, plugin := range node.Plugins {
 		err := GetPlugin(&plugin)
 		if err != nil {
-			log.Println("Error getting plugin:", err)
+			log.Logger.Debugln("Error getting plugin:", err)
 			plugin.IsActual = false
 			continue
 		}
 		// Find the plugin file on the node
 		pluginFile, err := sftpClient.Open(fmt.Sprintf("%s/%s", node.GetPluginFolder(), plugin.Name))
 		if err != nil {
-			log.Println("Error opening plugin file:", err)
+			log.Logger.Debugln("Error opening plugin file:", err)
 			plugin.IsActual = false
 			continue
 		}
@@ -264,7 +264,7 @@ func CheckPluginsBySSH(node CheckMkNode) (CheckMkNode, error) {
 		buffer := bytes.NewBuffer(make([]byte, 0))
 		_, err = buffer.ReadFrom(reader)
 		if err != nil {
-			log.Println("Error reading plugin file:", err)
+			log.Logger.Debugln("Error reading plugin file:", err)
 			plugin.IsActual = false
 			continue
 		}
@@ -275,7 +275,7 @@ func CheckPluginsBySSH(node CheckMkNode) (CheckMkNode, error) {
 		// Check if the md5 hash of the plugin file on the node is different
 		if md5HashOnNode != plugin.CalculateMd5() {
 			plugin.IsActual = false
-			log.Println("Plugin", plugin.Name, "is not actual on", node.Host)
+			log.Logger.Debugln("Plugin", plugin.Name, "is not actual on", node.Host)
 			continue
 		}
 		plugin.IsActual = true
@@ -302,7 +302,7 @@ func PluginChecker() {
 		if !node.IsAvailable {
 			continue
 		}
-		log.Println("Check plugins on", node.Host)
+		log.Logger.Debugln("Check plugins on", node.Host)
 		// Add 1 to wait group
 		wg.Add(1)
 		// Run the check plugins by ssh in goroutine
@@ -312,7 +312,7 @@ func PluginChecker() {
 			// Check the plugins on the node
 			_, err := CheckPluginsBySSH(node)
 			if err != nil {
-				log.Println("Error checking plugins by ssh:", err)
+				log.Logger.Debugln("Error checking plugins by ssh:", err)
 				return
 			}
 			// Update the node in the map

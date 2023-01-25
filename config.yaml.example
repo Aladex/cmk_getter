@@ -1,10 +1,15 @@
 listen: 0.0.0.0
 port: 8080
-domain: cmk.internal.domain.com
+domain: check-mk.internal.domain.com
 polling: 10
 site: mysite
+path_to_id_rsa: /root/.ssh/id_ed25519
 folders:
-  - /path/to/folder1
-  - /path/to/folder2
+  - /folder1
+  - ./folder2
 username: cmk_getter
 password: generated_password
+plugins:
+  - mk_inventory.linux
+  - mk_logwatch.py
+log_level: debug
